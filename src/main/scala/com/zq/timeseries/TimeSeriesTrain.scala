@@ -78,12 +78,12 @@ object TimeSeriesTrain {
     Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
 
     //set the environment
-    //System.setProperty("hadoop.home.dir", "F:\\hadoop-2.6.5\\")
-    System.setProperty("hadoop.home.dir", "E:\\bigdata-sourcecode\\hadoop_src\\hadoop-2.7.0\\")
+    System.setProperty("hadoop.home.dir", "F:\\hadoop-2.6.5\\")
+    //System.setProperty("hadoop.home.dir", "E:\\bigdata-sourcecode\\hadoop_src\\hadoop-2.7.0\\")
     //val conf = new SparkConf().setAppName("Spark MRO Location APP wy")
     val conf = new SparkConf().setAppName("timeSeries.local.TimeSeriesTrain").setMaster("local[2]")
     val outputDir = "data/resDir"
-    val inputfile_path = "data/dataflow20180710.csv"
+    val inputfile_path = "data/dataflow.csv"
     
     val sc = new SparkContext(conf)
     val sqlContext=new SQLContext(sc)
@@ -185,7 +185,7 @@ object TimeSeriesTrain {
     modelName match{
       case "arima"=>{
         //创建和训练arima模型
-        val (forecast,coefficients)=timeSeriesModel.arimaModelTrain(trainTsrddnotnull)
+        val forecast=timeSeriesModel.arimaModelTrain(trainTsrddnotnull)
         //Arima模型评估参数的保存
         forecastValue=forecast
         //timeSeriesModel.arimaModelEvaluationSave(coefficients,forecast,sqlContext)
