@@ -13,6 +13,8 @@ import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{Row, SQLContext, SaveMode}
 
 import scala.collection.mutable.ArrayBuffer
+import org.apache.spark.sql.SparkSession
+import java.math.BigDecimal
 
 /**
  * 时间序列模型
@@ -92,8 +94,8 @@ class TimeSeriesModel extends Serializable{
         }
       }
     }
-    println("Arima forecast of next "+predictedN+" observations:")
-    forecastValue.foreach(println)
+    //println("Arima forecast of next "+predictedN+" observations:")
+    //forecastValue.foreach(println)
 
     return (forecastValue,coefficients)
   }
@@ -160,8 +162,9 @@ class TimeSeriesModel extends Serializable{
    * 去掉row开头数据的括号和结尾的括号
    */
   private def numChoose(word:String):String={
-    val numPattern="\\d*(\\.?)\\d*".r
-    numPattern.findAllIn(word).mkString("")
+    //val numPattern="\\d*(\\.?)\\d*".r
+    //numPattern.findAllIn(word).mkString("")
+    word.replaceAll("\\(","").replaceAll("\\)","")
   }
 
   /**
@@ -428,8 +431,6 @@ class TimeSeriesModel extends Serializable{
   }
 
   /**
-   * 合并实际值和预测值，并加上日期,形成dataframe(Date,Data)
-   * 并保存在hive中
    * @param trainTsrdd      从hive中读取的数据
    * @param forecastValue   预测出来的数据（分为arima和holtwinters预测的）
    * @param predictedN      预测多少个值
@@ -440,7 +441,7 @@ class TimeSeriesModel extends Serializable{
    * @param keyName 选择哪个key输出
    * @param sqlContext
    */
-  def actualForcastDateSaveInHive(trainTsrdd:TimeSeriesRDD[String],forecastValue:RDD[(String,Vector)],predictedN:Int,startTime:String,endTime:String,sc:SparkContext,hiveColumnName:List[String],keyName:String,sqlContext:SQLContext): Unit ={
+  def actualForcastDateSave(trainTsrdd:TimeSeriesRDD[String],forecastValue:RDD[(String,Vector)],predictedN:Int,startTime:String,endTime:String,sc:SparkContext,hiveColumnName:List[String],keyName:String,sparkSession:SparkSession,outputDir:String): Unit ={
     //加载驱动
     //Class.forName("com.mysql.jdbc.Driver")
     //设置用户名和密码
@@ -471,32 +472,40 @@ class TimeSeriesModel extends Serializable{
       dateArray=productStartDayPredictDayRail(predictedN,startTime,endTime)
     }
     val dateRdd=sc.parallelize(dateArray.toArray.mkString(",").split(",").map(date=>(date)))
-
     //合并日期和数据值,形成RDD[Row]+keyName
     val actualAndForcastArray=actualAndForcastRdd.collect()
     for(i<-0 until actualAndForcastArray.length){
+      val key = actualAndForcastArray(i)._1
+      val value = actualAndForcastArray(i)._2
       val dateDataRdd=actualAndForcastArray(i) match {
         case (key,value)=>{
           //指定key输出
-          if(keyName==key){
+          //if(keyName==key){
             val actualAndForcast=sc.parallelize(value.toString().split(",").map(data=>(numChoose(data))))
             dateRdd.zip(actualAndForcast).map{
               _ match {
-                case (date,data)=>Row(date,data)
+                case (date,data)=>(date,key,new BigDecimal(data.toDouble).toPlainString())
               }
             }
-          }else{
-            sc.parallelize(Seq(Row("1")))
-          }
+//          }else{
+//            sc.parallelize(Seq(Row("1")))
+//          }
         }
       }
       //保存信息
-      print("======>>>>>>>>>>>>>>>>>")
+    //println("======>>>>>>>>>>>>>>>>>")
+    import sparkSession.implicits._
+    val resDF = dateDataRdd.toDF()
+    val dir = outputDir+"/"+key
+    val saveOptions = Map("header" -> "false", "path" -> dir)    
+    resDF.coalesce(1)
+    .write.format("com.databricks.spark.csv").mode(SaveMode.Overwrite).options(saveOptions).save()
       //dateDataRdd.foreach(println)
 //      if(dateDataRdd.collect()(0).toString()!="[1]"){
 //        saveInHive(dateDataRdd,hiveColumnName,sqlContext,prop)
 //      }
     }
+
   }
 
 }

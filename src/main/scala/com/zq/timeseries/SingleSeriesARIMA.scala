@@ -19,7 +19,7 @@ object SingleSeriesARIMA {
     println("coefficients: " + arimaModel.coefficients.mkString(","))
     val forecast = arimaModel.forecast(ts, 5)
     //预测出后五个的值。
-    println("forecast of next 5 observations: " + forecast.toArray.mkString(","))
+    println("arimaModel forecast of next 5 observations: " + forecast.toArray.mkString(","))
 
     /**
      * HoltWinters
@@ -35,6 +35,6 @@ object SingleSeriesARIMA {
     val predictedVectors=Vectors.dense(predictedArrayBuffer.toArray)
     val forecast2 = holtWintersModel.forecast(ts,predictedVectors)
     //预测出后五个的值。
-    println("forecast of next 5 observations: " + forecast2.toArray.mkString(","))
+    println("HoltWinters forecast of next 5 observations: " + forecast2.toArray.mkString(","))
   }
 }

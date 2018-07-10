@@ -18,12 +18,18 @@
 		<maven.compiler.source>1.6</maven.compiler.source>
 		<maven.compiler.target>1.6</maven.compiler.target>
 		<encoding>UTF-8</encoding>
-		<scala.version>2.11</scala.version>
+		<scala.minor.version>2.11</scala.minor.version>
+		<scala.complete.version>${scala.minor.version}.8</scala.complete.version>
 		<spark.version>2.1.0</spark.version>
-		<sparkts.version>0.4.1</sparkts.version>
+		<sparkts.version>0.4.0</sparkts.version>
 	</properties>
 
   <dependencies>
+  		<dependency>
+            <groupId>org.scala-lang</groupId>
+            <artifactId>scala-library</artifactId>
+            <version>${scala.complete.version}</version>
+        </dependency>
 		<dependency>
 			<groupId>com.cloudera.sparkts</groupId>
             <artifactId>sparkts</artifactId>
@@ -31,17 +37,17 @@
 		</dependency>
 		<dependency>
 			<groupId>org.apache.spark</groupId>
-			<artifactId>spark-core_${scala.version}</artifactId>
+			<artifactId>spark-core_${scala.minor.version}</artifactId>
 			<version>${spark.version}</version>
 		</dependency>
 	    <dependency>
 		    <groupId>org.apache.spark</groupId>
-		    <artifactId>spark-mllib_${scala.version}</artifactId>
+		    <artifactId>spark-mllib_${scala.minor.version}</artifactId>
 		    <version>${spark.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>org.apache.spark</groupId>
-			<artifactId>spark-sql_${scala.version}</artifactId>
+			<artifactId>spark-sql_${scala.minor.version}</artifactId>
 			<version>${spark.version}</version>
 		</dependency>
 		
@@ -71,7 +77,6 @@
             </goals>
             <configuration>
               <args>
-                <arg>-make:transitive</arg>
                 <arg>-dependencyfile</arg>
                 <arg>${project.build.directory}/.scala_dependencies</arg>
               </args>
