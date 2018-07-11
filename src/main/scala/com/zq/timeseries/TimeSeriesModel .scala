@@ -458,14 +458,22 @@ class TimeSeriesModel extends Serializable{
     //在真实值后面追加预测值
     val actualAndForcastRdd=trainTsrdd.map{
       _ match {
-        case (key,actualValue)=>(key,actualValue.toArray.mkString(","))
+        case (key,actualValue)=>(key,actualValue.toArray.map(_.formatted("%.2f")).mkString(","))
       }
     }.join(forecastValue.map{
       _ match{
-        case (key,forecastValue)=>(key,forecastValue.toArray.mkString(","))
+        case (key,forecastValue)=>(key,forecastValue.toArray.map(_.formatted("%.2f")).mkString(","))
       }
-    })
-
+    }).map(a => a._1+","+a._2).map(_.replaceAll("\\(","").replaceAll("\\)",""))
+    actualAndForcastRdd.foreach(println)
+    import sparkSession.implicits._
+    val resDF = actualAndForcastRdd.toDF()
+    val dir = outputDir
+    val saveOptions = Map("header" -> "false", "path" -> dir)    
+    resDF//.coalesce(1)
+    .write.format("text").mode(SaveMode.Overwrite).options(saveOptions).save()
+    
+/**
     //获取日期，并转换成rdd
     var dateArray:ArrayBuffer[String]=new ArrayBuffer[String]()
     if(startTime.length==6){
@@ -476,10 +484,12 @@ class TimeSeriesModel extends Serializable{
       dateArray=productStartDayPredictDay(predictedN,startTime,endTime)
     }else if(startTime.length==10){
       dateArray=productStartDayPredictDayRail(predictedN,startTime,endTime)
-    }
-    val dateRdd=sc.parallelize(dateArray.toArray.mkString(",").split(",").map(date=>(date)))
+
+    //dateDataRdd.foreach(println)
+    
     //合并日期和数据值,形成RDD[Row]+keyName
     val actualAndForcastArray=actualAndForcastRdd.collect()
+    actualAndForcastRdd.foreach(println)
     for(i<-0 until actualAndForcastArray.length){
       val key = actualAndForcastArray(i)._1
       val value = actualAndForcastArray(i)._2
@@ -504,10 +514,12 @@ class TimeSeriesModel extends Serializable{
     val resDF = dateDataRdd.toDF()
     val dir = outputDir+"/"+key
     val saveOptions = Map("header" -> "false", "path" -> dir)    
-    resDF.coalesce(1)
+    resDF//.coalesce(1)
     .write.format("com.databricks.spark.csv").mode(SaveMode.Overwrite).options(saveOptions).save()
       //dateDataRdd.foreach(println)
     }
+ 
+*/
 
   }
 

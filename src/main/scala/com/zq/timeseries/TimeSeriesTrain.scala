@@ -12,6 +12,7 @@ import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.mllib.linalg.DenseVector
+import scala.util.Try
 
 /**
  * 时间序列模型time-series的建立(处理key值为空的，也就是没有公司名称的数据)
@@ -25,36 +26,40 @@ object TimeSeriesTrain {
    * @param hiveColumnName
    * @return zonedDateDataDf
    */
-  def timeChangeToDate(timeDataKeyDf:DataFrame,sqlContext: SQLContext,hiveColumnName:List[String],startTime:String,sc:SparkContext): DataFrame ={
+  def timeChangeToDate(timeDataKeyDf:DataFrame,sqlContext: SQLContext,columnName:List[String],startTime:String,sc:SparkContext): DataFrame ={
     var rowRDD:RDD[Row]=sc.parallelize(Seq(Row(""),Row("")))
     //空值填充
     val newDf = timeDataKeyDf.na.fill("0",Seq("bytes"))
     //具体到月份
     if(startTime.length==6){
       rowRDD=newDf.rdd.map{row=>
-        row match{
-          case Row(time,key,data)=>{
-            val dt = ZonedDateTime.of(time.toString.substring(0,4).toInt,time.toString.substring(4).toInt,1,0,0,0,0,ZoneId.systemDefault())
-            Row(Timestamp.from(dt.toInstant), key.toString, data.toString.toDouble)
+        Try(
+          row match{
+            case Row(time,key,data)=>{
+              val dt = ZonedDateTime.of(time.toString.substring(0,4).toInt,time.toString.substring(4).toInt,1,0,0,0,0,ZoneId.systemDefault())
+              Row(Timestamp.from(dt.toInstant), key.toString, data.toString.toDouble)
+            }
           }
-        }
-      }
+        )
+      }.filter(_.isSuccess).map(_.get)
     }else if(startTime.length==8){
       //具体到日
       rowRDD=newDf.rdd.map{row=>
-        row match{
-          case Row(time,key,data)=>{
-            val dt = ZonedDateTime.of(time.toString.substring(0,4).toInt,time.toString.substring(4,6).toInt,time.toString.substring(6).toInt,0,0,0,0,ZoneId.systemDefault())
-            Row(Timestamp.from(dt.toInstant), key.toString, data.toString.toDouble)
+        Try(
+          row match{
+            case Row(time,key,data)=>{
+              val dt = ZonedDateTime.of(time.toString.substring(0,4).toInt,time.toString.substring(4,6).toInt,time.toString.substring(6).toInt,0,0,0,0,ZoneId.systemDefault())
+              Row(Timestamp.from(dt.toInstant), key.toString, data.toString.toDouble)
+            }
           }
-        }
-      }
+        )
+      }.filter(_.isSuccess).map(_.get)
     }
     //根据模式字符串生成模式，转化成dataframe格式
     val field=Seq(
-      StructField(hiveColumnName(0), TimestampType, true),
-      StructField(hiveColumnName(0)+"Key", StringType, true),
-      StructField(hiveColumnName(1), DoubleType, true)
+      StructField(columnName(0), TimestampType, true),
+      StructField(columnName(0)+"Key", StringType, true),
+      StructField(columnName(1), DoubleType, true)
     )
     val schema=StructType(field)
     val zonedDateDataDf=sqlContext.createDataFrame(rowRDD,schema)
@@ -123,8 +128,6 @@ object TimeSeriesTrain {
                   .withColumnRenamed("_c2", "bytes")
     
     csvfile.printSchema()
-//    val timeDataKeyDf=hiveDataDf.withColumn(hiveColumnName(0)+"Key",hiveDataDf(hiveColumnName(1))*0.toString)
-//      .select(hiveColumnName(0),hiveColumnName(0)+"Key",hiveColumnName(1))
     val zonedDateDataDf=timeChangeToDate(csvfile,sqlContext,columnName,startTime,sc)
     //println(zonedDateDataDf.show(false))
 
