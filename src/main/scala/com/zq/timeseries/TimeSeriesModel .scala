@@ -15,6 +15,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.sql.SparkSession
 import java.math.BigDecimal
 import scala.util.Try
+import com.cloudera.sparkts.models.ARIMA
 
 /**
  * 时间序列模型
@@ -50,7 +51,8 @@ class TimeSeriesModel extends Serializable{
         line match {
           case (key,denseVector)=>
             //(key,ARIMA.autoFit(denseVector),denseVector)
-            (key,ARIMA2.fitModel(7, 0, 1,denseVector),denseVector)
+            //固定模型(1, 1, 1)测试效果较好
+            (key,ARIMA2.fitModel(1, 1, 1,denseVector),denseVector)
         }
       )
     }.filter(_.isSuccess).map(_.get)

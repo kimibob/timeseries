@@ -98,13 +98,13 @@ object TimeSeriesTrain {
     val databaseTableName="time_series.jxt_electric_month"
     //选择模型(holtwinters或者是arima)
     val modelName="arima"
-    //选择要hive的数据表中要处理的time和data列名（输入表中用于训练的列名,必须前面是时间，后面是data）
-    val hiveColumnName=List("time","data")
+    //数据表中要处理的time和data列名（输入表中用于训练的列名,必须前面是时间，后面是data）
+    val columnName=List("time","data")
     //日期的开始和结束，格式为“yyyyMM”或者为“yyyyMMdd”
     val startTime="20180204"
     val endTime="20180630"
     //预测后面N个值
-    val predictedN=180
+    val predictedN=184
     //存放的表名字
     val outputTableName="timeseries_outputdate"
 
@@ -115,15 +115,7 @@ object TimeSeriesTrain {
     val holtWintersModelType="Multiplicative"
 
     /*****读取数据和创建训练数据*****/
-//    //read the data form the hive
-//    val hiveDataDf=hiveContext.sql("select * from "+databaseTableName)
-//      .select(hiveColumnName.head,hiveColumnName.tail:_*)
-//    val hiveDataDf=sqlContext.load("com.databricks.spark.csv",Map("path" -> "src/main/resources/data/timeSeriesDate.csv", "header" -> "true"))
-//      .select(hiveColumnName.head,hiveColumnName.tail:_*)
 
-    //In hiveDataDF:increase a new column.This column's name is hiveColumnName(0)+"Key",it's value is 0.
-    //The reason is:The string column labeling which string key the observation belongs to.
-    
     //val csvfile = sparkSession.read.csv("data/dataflow20180710.csv")
     val csvfile = sparkSession.read.csv(inputfile_path)
                   .withColumnRenamed("_c0", "date")
@@ -133,7 +125,7 @@ object TimeSeriesTrain {
     csvfile.printSchema()
 //    val timeDataKeyDf=hiveDataDf.withColumn(hiveColumnName(0)+"Key",hiveDataDf(hiveColumnName(1))*0.toString)
 //      .select(hiveColumnName(0),hiveColumnName(0)+"Key",hiveColumnName(1))
-    val zonedDateDataDf=timeChangeToDate(csvfile,sqlContext,hiveColumnName,startTime,sc)
+    val zonedDateDataDf=timeChangeToDate(csvfile,sqlContext,columnName,startTime,sc)
     //println(zonedDateDataDf.show(false))
 
     /**
@@ -162,8 +154,9 @@ object TimeSeriesTrain {
     }
     //System.exit(0)
     //创建训练数据TimeSeriesRDD(key,DenseVector(series))
+
     val trainTsrdd = TimeSeriesRDD.timeSeriesRDDFromObservations(dtIndex, zonedDateDataDf,
-      hiveColumnName(0), hiveColumnName(0)+"Key", hiveColumnName(1))
+      columnName(0), columnName(0)+"Key", columnName(1))
     //填充缺失值
     val trainTsrddnotnull = trainTsrdd.mapSeries { values =>
       val result = values.copy.toArray
@@ -176,8 +169,8 @@ object TimeSeriesTrain {
     }
     //插值法填充空值
     //val filledTrainTsrdd = trainTsrdd.fill("linear")
-    //trainTsrddnotnull.cache()
-    //filledTrainTsrdd.foreach(println)
+    trainTsrddnotnull.cache()
+    //trainTsrddnotnull.foreach(println)
     /*****建立Modle对象*****/
     val timeSeriesModel=new TimeSeriesModel(predictedN,outputTableName)
     var forecastValue:RDD[(String,Vector)]=sc.parallelize(Seq(("",Vectors.dense(1))))
@@ -202,6 +195,6 @@ object TimeSeriesTrain {
 
     //合并实际值和预测值，并加上日期,形成dataframe(Date,Data)，并保存
     println("save file...")
-    timeSeriesModel.actualForcastDateSave(trainTsrddnotnull,forecastValue,predictedN,startTime,endTime,sc,hiveColumnName,"dataflow",sparkSession,outputDir)
+    timeSeriesModel.actualForcastDateSave(trainTsrddnotnull,forecastValue,predictedN,startTime,endTime,sc,columnName,"dataflow",sparkSession,outputDir)
   }
 }
