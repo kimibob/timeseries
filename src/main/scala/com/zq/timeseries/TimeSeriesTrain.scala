@@ -12,6 +12,7 @@ import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.mllib.linalg.DenseVector
+import scala.util.Try
 
 /**
  * 时间序列模型time-series的建立(处理key值为空的，也就是没有公司名称的数据)
@@ -25,36 +26,40 @@ object TimeSeriesTrain {
    * @param hiveColumnName
    * @return zonedDateDataDf
    */
-  def timeChangeToDate(timeDataKeyDf:DataFrame,sqlContext: SQLContext,hiveColumnName:List[String],startTime:String,sc:SparkContext): DataFrame ={
+  def timeChangeToDate(timeDataKeyDf:DataFrame,sqlContext: SQLContext,columnName:List[String],startTime:String,sc:SparkContext): DataFrame ={
     var rowRDD:RDD[Row]=sc.parallelize(Seq(Row(""),Row("")))
     //空值填充
     val newDf = timeDataKeyDf.na.fill("0",Seq("bytes"))
     //具体到月份
     if(startTime.length==6){
       rowRDD=newDf.rdd.map{row=>
-        row match{
-          case Row(time,key,data)=>{
-            val dt = ZonedDateTime.of(time.toString.substring(0,4).toInt,time.toString.substring(4).toInt,1,0,0,0,0,ZoneId.systemDefault())
-            Row(Timestamp.from(dt.toInstant), key.toString, data.toString.toDouble)
+        Try(
+          row match{
+            case Row(time,key,data)=>{
+              val dt = ZonedDateTime.of(time.toString.substring(0,4).toInt,time.toString.substring(4).toInt,1,0,0,0,0,ZoneId.systemDefault())
+              Row(Timestamp.from(dt.toInstant), key.toString, data.toString.toDouble)
+            }
           }
-        }
-      }
+        )
+      }.filter(_.isSuccess).map(_.get)
     }else if(startTime.length==8){
       //具体到日
       rowRDD=newDf.rdd.map{row=>
-        row match{
-          case Row(time,key,data)=>{
-            val dt = ZonedDateTime.of(time.toString.substring(0,4).toInt,time.toString.substring(4,6).toInt,time.toString.substring(6).toInt,0,0,0,0,ZoneId.systemDefault())
-            Row(Timestamp.from(dt.toInstant), key.toString, data.toString.toDouble)
+        Try(
+          row match{
+            case Row(time,key,data)=>{
+              val dt = ZonedDateTime.of(time.toString.substring(0,4).toInt,time.toString.substring(4,6).toInt,time.toString.substring(6).toInt,0,0,0,0,ZoneId.systemDefault())
+              Row(Timestamp.from(dt.toInstant), key.toString, data.toString.toDouble)
+            }
           }
-        }
-      }
+        )
+      }.filter(_.isSuccess).map(_.get)
     }
     //根据模式字符串生成模式，转化成dataframe格式
     val field=Seq(
-      StructField(hiveColumnName(0), TimestampType, true),
-      StructField(hiveColumnName(0)+"Key", StringType, true),
-      StructField(hiveColumnName(1), DoubleType, true)
+      StructField(columnName(0), TimestampType, true),
+      StructField(columnName(0)+"Key", StringType, true),
+      StructField(columnName(1), DoubleType, true)
     )
     val schema=StructType(field)
     val zonedDateDataDf=sqlContext.createDataFrame(rowRDD,schema)
@@ -78,12 +83,12 @@ object TimeSeriesTrain {
     Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
 
     //set the environment
-    //System.setProperty("hadoop.home.dir", "F:\\hadoop-2.6.5\\")
-    System.setProperty("hadoop.home.dir", "E:\\bigdata-sourcecode\\hadoop_src\\hadoop-2.7.0\\")
+    System.setProperty("hadoop.home.dir", "F:\\hadoop-2.6.5\\")
+    //System.setProperty("hadoop.home.dir", "E:\\bigdata-sourcecode\\hadoop_src\\hadoop-2.7.0\\")
     //val conf = new SparkConf().setAppName("Spark MRO Location APP wy")
     val conf = new SparkConf().setAppName("timeSeries.local.TimeSeriesTrain").setMaster("local[2]")
     val outputDir = "data/resDir"
-    val inputfile_path = "data/dataflow20180710.csv"
+    val inputfile_path = "data/dataflow.csv"
     
     val sc = new SparkContext(conf)
     val sqlContext=new SQLContext(sc)
@@ -98,13 +103,13 @@ object TimeSeriesTrain {
     val databaseTableName="time_series.jxt_electric_month"
     //选择模型(holtwinters或者是arima)
     val modelName="arima"
-    //选择要hive的数据表中要处理的time和data列名（输入表中用于训练的列名,必须前面是时间，后面是data）
-    val hiveColumnName=List("time","data")
+    //数据表中要处理的time和data列名（输入表中用于训练的列名,必须前面是时间，后面是data）
+    val columnName=List("time","data")
     //日期的开始和结束，格式为“yyyyMM”或者为“yyyyMMdd”
     val startTime="20180204"
     val endTime="20180630"
     //预测后面N个值
-    val predictedN=180
+    val predictedN=184
     //存放的表名字
     val outputTableName="timeseries_outputdate"
 
@@ -115,15 +120,7 @@ object TimeSeriesTrain {
     val holtWintersModelType="Multiplicative"
 
     /*****读取数据和创建训练数据*****/
-//    //read the data form the hive
-//    val hiveDataDf=hiveContext.sql("select * from "+databaseTableName)
-//      .select(hiveColumnName.head,hiveColumnName.tail:_*)
-//    val hiveDataDf=sqlContext.load("com.databricks.spark.csv",Map("path" -> "src/main/resources/data/timeSeriesDate.csv", "header" -> "true"))
-//      .select(hiveColumnName.head,hiveColumnName.tail:_*)
 
-    //In hiveDataDF:increase a new column.This column's name is hiveColumnName(0)+"Key",it's value is 0.
-    //The reason is:The string column labeling which string key the observation belongs to.
-    
     //val csvfile = sparkSession.read.csv("data/dataflow20180710.csv")
     val csvfile = sparkSession.read.csv(inputfile_path)
                   .withColumnRenamed("_c0", "date")
@@ -131,9 +128,7 @@ object TimeSeriesTrain {
                   .withColumnRenamed("_c2", "bytes")
     
     csvfile.printSchema()
-//    val timeDataKeyDf=hiveDataDf.withColumn(hiveColumnName(0)+"Key",hiveDataDf(hiveColumnName(1))*0.toString)
-//      .select(hiveColumnName(0),hiveColumnName(0)+"Key",hiveColumnName(1))
-    val zonedDateDataDf=timeChangeToDate(csvfile,sqlContext,hiveColumnName,startTime,sc)
+    val zonedDateDataDf=timeChangeToDate(csvfile,sqlContext,columnName,startTime,sc)
     //println(zonedDateDataDf.show(false))
 
     /**
@@ -162,8 +157,9 @@ object TimeSeriesTrain {
     }
     //System.exit(0)
     //创建训练数据TimeSeriesRDD(key,DenseVector(series))
+
     val trainTsrdd = TimeSeriesRDD.timeSeriesRDDFromObservations(dtIndex, zonedDateDataDf,
-      hiveColumnName(0), hiveColumnName(0)+"Key", hiveColumnName(1))
+      columnName(0), columnName(0)+"Key", columnName(1))
     //填充缺失值
     val trainTsrddnotnull = trainTsrdd.mapSeries { values =>
       val result = values.copy.toArray
@@ -176,8 +172,8 @@ object TimeSeriesTrain {
     }
     //插值法填充空值
     //val filledTrainTsrdd = trainTsrdd.fill("linear")
-    //trainTsrddnotnull.cache()
-    //filledTrainTsrdd.foreach(println)
+    trainTsrddnotnull.cache()
+    //trainTsrddnotnull.foreach(println)
     /*****建立Modle对象*****/
     val timeSeriesModel=new TimeSeriesModel(predictedN,outputTableName)
     var forecastValue:RDD[(String,Vector)]=sc.parallelize(Seq(("",Vectors.dense(1))))
@@ -185,7 +181,7 @@ object TimeSeriesTrain {
     modelName match{
       case "arima"=>{
         //创建和训练arima模型
-        val (forecast,coefficients)=timeSeriesModel.arimaModelTrain(trainTsrddnotnull)
+        val forecast=timeSeriesModel.arimaModelTrain(trainTsrddnotnull)
         //Arima模型评估参数的保存
         forecastValue=forecast
         //timeSeriesModel.arimaModelEvaluationSave(coefficients,forecast,sqlContext)
@@ -202,6 +198,6 @@ object TimeSeriesTrain {
 
     //合并实际值和预测值，并加上日期,形成dataframe(Date,Data)，并保存
     println("save file...")
-    timeSeriesModel.actualForcastDateSave(trainTsrddnotnull,forecastValue,predictedN,startTime,endTime,sc,hiveColumnName,"dataflow",sparkSession,outputDir)
+    timeSeriesModel.actualForcastDateSave(trainTsrddnotnull,forecastValue,predictedN,startTime,endTime,sc,columnName,"dataflow",sparkSession,outputDir)
   }
 }

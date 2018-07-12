@@ -4,7 +4,6 @@ import java.text.SimpleDateFormat
 import java.util.{Calendar, Properties}
 
 import com.cloudera.sparkts.TimeSeriesRDD
-import com.cloudera.sparkts.models.ARIMA
 import org.apache.spark.SparkContext
 import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.mllib.stat.Statistics
@@ -15,6 +14,8 @@ import org.apache.spark.sql.{Row, SQLContext, SaveMode}
 import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.sql.SparkSession
 import java.math.BigDecimal
+import scala.util.Try
+import com.cloudera.sparkts.models.ARIMA
 
 /**
  * 时间序列模型
@@ -39,36 +40,40 @@ class TimeSeriesModel extends Serializable{
    * 输出其预测的predictedN个值
    * @param trainTsrdd
    */
-  def arimaModelTrain(trainTsrdd:TimeSeriesRDD[String]): (RDD[(String,Vector)],RDD[(String,(String,(String,String,String),String,String))])={
+  def arimaModelTrain(trainTsrdd:TimeSeriesRDD[String]): (RDD[(String,Vector)])={
     /***参数设置******/
     val predictedN=this.predictedN
 
     /***创建arima模型***/
     //创建和训练arima模型.其RDD格式为(ArimaModel,Vector)
     val arimaAndVectorRdd=trainTsrdd.map{line=>
-      line match {
-        case (key,denseVector)=>
-          (key,ARIMA.autoFit(denseVector),denseVector)
-      }
-    }
-
-    /**参数输出:p,d,q的实际值和其系数值、最大似然估计值、aic值**/
-    val coefficients=arimaAndVectorRdd.map{line=>
-      line match{
-        case (key,arimaModel,denseVector)=>{
-          (key,(arimaModel.coefficients.mkString(","),
-            (arimaModel.p.toString,
-              arimaModel.d.toString,
-              arimaModel.q.toString),
-            arimaModel.logLikelihoodCSS(denseVector).toString,
-            arimaModel.approxAIC(denseVector).toString))
+      Try(
+        line match {
+          case (key,denseVector)=>
+            //(key,ARIMA.autoFit(denseVector),denseVector)
+            //固定模型(1, 1, 1)测试效果较好
+            (key,ARIMA2.fitModel(1, 1, 1,denseVector),denseVector)
         }
-      }
-    }
-    coefficients.collect().map{_ match{
-      case (key,(coefficients,(p,d,q),logLikelihood,aic))=>
-        println(key+" coefficients:"+coefficients+"=>"+"(p="+p+",d="+d+",q="+q+")")
-    }}
+      )
+    }.filter(_.isSuccess).map(_.get)
+    
+    /**参数输出:p,d,q的实际值和其系数值、最大似然估计值、aic值**/
+//    val coefficients=arimaAndVectorRdd.map{line=>
+//      line match{
+//        case (key,arimaModel,denseVector)=>{
+//          (key,(arimaModel.coefficients.mkString(","),
+//            (arimaModel.p.toString,
+//              arimaModel.d.toString,
+//              arimaModel.q.toString),
+//            arimaModel.logLikelihoodCSS(denseVector).toString,
+//            arimaModel.approxAIC(denseVector).toString))
+//        }
+//      }
+//    }
+//    coefficients.collect().map{_ match{
+//      case (key,(coefficients,(p,d,q),logLikelihood,aic))=>
+//        println(key+" coefficients:"+coefficients+"=>"+"(p="+p+",d="+d+",q="+q+")")
+//    }}
 
 
     /***预测出后N个的值*****/
@@ -86,6 +91,7 @@ class TimeSeriesModel extends Serializable{
           val partArray=value.toArray.mkString(",").split(",")
           var forecastArrayBuffer=new ArrayBuffer[Double]()
           var i=partArray.length-predictedN
+          //拟合训练数据的值+预测的值,这里只取出预测的值，后续与原始值合并
           while(i<partArray.length){
             forecastArrayBuffer+=partArray(i).toDouble
             i=i+1
@@ -97,7 +103,7 @@ class TimeSeriesModel extends Serializable{
     //println("Arima forecast of next "+predictedN+" observations:")
     //forecastValue.foreach(println)
 
-    return (forecastValue,coefficients)
+    return forecastValue
   }
 
   /**
@@ -452,14 +458,22 @@ class TimeSeriesModel extends Serializable{
     //在真实值后面追加预测值
     val actualAndForcastRdd=trainTsrdd.map{
       _ match {
-        case (key,actualValue)=>(key,actualValue.toArray.mkString(","))
+        case (key,actualValue)=>(key,actualValue.toArray.map(_.formatted("%.2f")).mkString(","))
       }
     }.join(forecastValue.map{
       _ match{
-        case (key,forecastValue)=>(key,forecastValue.toArray.mkString(","))
+        case (key,forecastValue)=>(key,forecastValue.toArray.map(_.formatted("%.2f")).mkString(","))
       }
-    })
-
+    }).map(a => a._1+","+a._2).map(_.replaceAll("\\(","").replaceAll("\\)",""))
+    actualAndForcastRdd.foreach(println)
+    import sparkSession.implicits._
+    val resDF = actualAndForcastRdd.toDF()
+    val dir = outputDir
+    val saveOptions = Map("header" -> "false", "path" -> dir)    
+    resDF//.coalesce(1)
+    .write.format("text").mode(SaveMode.Overwrite).options(saveOptions).save()
+    
+/**
     //获取日期，并转换成rdd
     var dateArray:ArrayBuffer[String]=new ArrayBuffer[String]()
     if(startTime.length==6){
@@ -470,10 +484,12 @@ class TimeSeriesModel extends Serializable{
       dateArray=productStartDayPredictDay(predictedN,startTime,endTime)
     }else if(startTime.length==10){
       dateArray=productStartDayPredictDayRail(predictedN,startTime,endTime)
-    }
-    val dateRdd=sc.parallelize(dateArray.toArray.mkString(",").split(",").map(date=>(date)))
+
+    //dateDataRdd.foreach(println)
+    
     //合并日期和数据值,形成RDD[Row]+keyName
     val actualAndForcastArray=actualAndForcastRdd.collect()
+    actualAndForcastRdd.foreach(println)
     for(i<-0 until actualAndForcastArray.length){
       val key = actualAndForcastArray(i)._1
       val value = actualAndForcastArray(i)._2
@@ -498,13 +514,12 @@ class TimeSeriesModel extends Serializable{
     val resDF = dateDataRdd.toDF()
     val dir = outputDir+"/"+key
     val saveOptions = Map("header" -> "false", "path" -> dir)    
-    resDF.coalesce(1)
+    resDF//.coalesce(1)
     .write.format("com.databricks.spark.csv").mode(SaveMode.Overwrite).options(saveOptions).save()
       //dateDataRdd.foreach(println)
-//      if(dateDataRdd.collect()(0).toString()!="[1]"){
-//        saveInHive(dateDataRdd,hiveColumnName,sqlContext,prop)
-//      }
     }
+ 
+*/
 
   }
 
