@@ -93,24 +93,24 @@ object Stocks {
     val timeSeriesModel = new TimeSeriesModel(4, "outputtablename")
     var forecastValue: RDD[(String, Vector)] = sc.parallelize(Seq(("", Vectors.dense(1))))
     //选择模型
-    val modelName="arima"
-    modelName match {
-      case "arima" => {
-        //创建和训练arima模型
-        val (forecast, coefficients) = timeSeriesModel.arimaModelTrain(filled)
-        //Arima模型评估参数的保存
-        forecastValue = forecast
-        timeSeriesModel.arimaModelEvaluationSave(coefficients, forecast, sqlContext)
-      }
-      case "holtwinters" => {
-        //创建和训练HoltWinters模型(季节性模型)
-        val (forecast, sse) = timeSeriesModel.holtWintersModelTrain(filled, 12, "Multiplicative")
-        //HoltWinters模型评估参数的保存
-        forecastValue = forecast
-        timeSeriesModel.holtWintersModelEvaluationSave(sse, forecast, sqlContext)
-      }
-      case _ => throw new UnsupportedOperationException("Currently only supports 'ariam' and 'holtwinters")
-    }
+//    val modelName="arima"
+//    modelName match {
+//      case "arima" => {
+//        //创建和训练arima模型
+//        val (forecast, coefficients) = timeSeriesModel.arimaModelTrain(filled)
+//        //Arima模型评估参数的保存
+//        forecastValue = forecast
+//        timeSeriesModel.arimaModelEvaluationSave(coefficients, forecast, sqlContext)
+//      }
+//      case "holtwinters" => {
+//        //创建和训练HoltWinters模型(季节性模型)
+//        val (forecast, sse) = timeSeriesModel.holtWintersModelTrain(filled, 12, "Multiplicative")
+//        //HoltWinters模型评估参数的保存
+//        forecastValue = forecast
+//        timeSeriesModel.holtWintersModelEvaluationSave(sse, forecast, sqlContext)
+//      }
+//      case _ => throw new UnsupportedOperationException("Currently only supports 'ariam' and 'holtwinters")
+//    }
 
     //合并实际值和预测值，并加上日期,形成dataframe(Date,Data)，并保存
     //timeSeriesModel.actualForcastDateSaveInHive(filled, forecastValue, predictedN, startTime, endTime, sc, hiveColumnName, "0.0", sqlContext)
