@@ -15,7 +15,7 @@ import org.apache.spark.mllib.linalg.DenseVector
 import scala.util.Try
 
 /**
- * 时间序列模型time-series的建立(处理key值为空的，也就是没有公司名称的数据)
+ * 时间序列模型time-series的建立
  */
 object TimeSeriesTrain {
 
@@ -74,21 +74,28 @@ object TimeSeriesTrain {
   def main(args: Array[String]) {
     
     /*****参数输入*****/
-//    val inputfile_path = args(0)
-//    val outputDir = args(1)
-    
+    val inputfile_path = args(0)
+    val outputDir = args(1)
+    val conf = new SparkConf().setAppName("Spark TimeSeries APP wy")
+    val runflag = args(2)
+    val startTime = args(3)
+    val endTime= args(4)
+    val predictedN= args(5).toInt
     /*****环境设置*****/
     //shield the unnecessary log in terminal
     Logger.getLogger("org.apache.spark").setLevel(Level.WARN)
     Logger.getLogger("org.eclipse.jetty.server").setLevel(Level.OFF)
 
     //set the environment
-    System.setProperty("hadoop.home.dir", "F:\\hadoop-2.6.5\\")
-    //System.setProperty("hadoop.home.dir", "E:\\bigdata-sourcecode\\hadoop_src\\hadoop-2.7.0\\")
-    //val conf = new SparkConf().setAppName("Spark MRO Location APP wy")
-    val conf = new SparkConf().setAppName("timeSeries.local.TimeSeriesTrain").setMaster("local[2]")
-    val outputDir = "data/resDir"
-    val inputfile_path = "data/dataflow.csv"
+//    System.setProperty("hadoop.home.dir", "E:\\bigdata-sourcecode\\hadoop_src\\hadoop-2.7.0\\")
+//    val conf = new SparkConf().setAppName("timeSeries.local.TimeSeriesTrain").setMaster("local[2]")
+//    val outputDir = "data/resDir"
+//    val inputfile_path = "data/dataflow.csv"
+//    val startTime="20180301"
+//    val endTime="20180731"
+//    val predictedN=184
+//    val runflag = "localtime2"
+    
     
     val sc = new SparkContext(conf)
     val sqlContext=new SQLContext(sc)
@@ -105,19 +112,15 @@ object TimeSeriesTrain {
     val modelName="arima"
     //数据表中要处理的time和data列名（输入表中用于训练的列名,必须前面是时间，后面是data）
     val columnName=List("time","data")
-    //日期的开始和结束，格式为“yyyyMM”或者为“yyyyMMdd”
-    val startTime="20180204"
-    val endTime="20180630"
-    //预测后面N个值
-    val predictedN=184
+
     //存放的表名字
     val outputTableName="timeseries_outputdate"
 
     //只有holtWinters才有的参数
     //季节性参数（12或者4）
-    val period=12
+    val period=60
     //holtWinters选择模型：additive（加法模型）、Multiplicative（乘法模型）
-    val holtWintersModelType="Multiplicative"
+    val holtWintersModelType="additive"
 
     /*****读取数据和创建训练数据*****/
 
@@ -191,13 +194,13 @@ object TimeSeriesTrain {
         val (forecast,sse) =timeSeriesModel.holtWintersModelTrain(trainTsrddnotnull,period,holtWintersModelType)
         //HoltWinters模型评估参数的保存
         forecastValue=forecast
-        timeSeriesModel.holtWintersModelEvaluationSave(sse,forecast,sqlContext)
+        //timeSeriesModel.holtWintersModelEvaluationSave(sse,forecast,sqlContext)
       }
       case _=>throw new UnsupportedOperationException("Currently only supports 'ariam' and 'holtwinters")
     }
-
+    forecastValue.cache();
     //合并实际值和预测值，并加上日期,形成dataframe(Date,Data)，并保存
     println("save file...")
-    timeSeriesModel.actualForcastDateSave(trainTsrddnotnull,forecastValue,predictedN,startTime,endTime,sc,columnName,"dataflow",sparkSession,outputDir)
+    timeSeriesModel.actualForcastDateSave(trainTsrddnotnull,forecastValue,predictedN,startTime,endTime,sc,columnName,"dataflow",sparkSession,outputDir,runflag)
   }
 }

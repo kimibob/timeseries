@@ -50,13 +50,13 @@ class TimeSeriesModel extends Serializable{
       Try(
         line match {
           case (key,denseVector)=>
-            //(key,ARIMA.autoFit(denseVector),denseVector)
+            //(key,ARIMA2.autoFit(denseVector),denseVector)
             //固定模型(1, 1, 1)测试效果较好
             (key,ARIMA2.fitModel(1, 1, 1,denseVector),denseVector)
         }
       )
     }.filter(_.isSuccess).map(_.get)
-    
+    arimaAndVectorRdd.cache()
     /**参数输出:p,d,q的实际值和其系数值、最大似然估计值、aic值**/
 //    val coefficients=arimaAndVectorRdd.map{line=>
 //      line match{
@@ -78,12 +78,15 @@ class TimeSeriesModel extends Serializable{
 
     /***预测出后N个的值*****/
     val forecast = arimaAndVectorRdd.map{row=>
-      row match{
-        case (key,arimaModel,denseVector)=>{
-          (key,arimaModel.forecast(denseVector, predictedN))
+      Try(
+        row match{
+          case (key,arimaModel,denseVector)=>{
+            (key,arimaModel.forecast(denseVector, predictedN))
+          }
         }
-      }
-    }
+      )
+    }.filter(_.isSuccess).map(_.get)
+    
     //取出预测值
     val forecastValue=forecast.map{
       _ match{
@@ -209,8 +212,8 @@ class TimeSeriesModel extends Serializable{
         }
       }
     }
-    println("HoltWinters forecast of next "+predictedN+" observations:")
-    forecast.foreach(println)
+    //println("HoltWinters forecast of next "+predictedN+" observations:")
+    //forecast.foreach(println)
 
     /**holtWinters模型评估度量：SSE和方差**/
     val sse=holtWintersAndVectorRdd.map{row=>
@@ -278,7 +281,7 @@ class TimeSeriesModel extends Serializable{
     val schemaString="sse,mean,variance,standardDeviation,max,min,range,count"
     val schema=StructType(schemaString.split(",").map(fileName=>StructField(fileName,StringType,true)))
     val evaluationDf=sqlContext.createDataFrame(evaluationRddRow,schema)
-    evaluationDf.show()
+    //evaluationDf.show()
   }
 
 
@@ -447,7 +450,7 @@ class TimeSeriesModel extends Serializable{
    * @param keyName 选择哪个key输出
    * @param sqlContext
    */
-  def actualForcastDateSave(trainTsrdd:TimeSeriesRDD[String],forecastValue:RDD[(String,Vector)],predictedN:Int,startTime:String,endTime:String,sc:SparkContext,hiveColumnName:List[String],keyName:String,sparkSession:SparkSession,outputDir:String): Unit ={
+  def actualForcastDateSave(trainTsrdd:TimeSeriesRDD[String],forecastValue:RDD[(String,Vector)],predictedN:Int,startTime:String,endTime:String,sc:SparkContext,hiveColumnName:List[String],keyName:String,sparkSession:SparkSession,outputDir:String,runflag:String): Unit ={
     //加载驱动
     //Class.forName("com.mysql.jdbc.Driver")
     //设置用户名和密码
@@ -455,25 +458,6 @@ class TimeSeriesModel extends Serializable{
     //prop.setProperty("user","root")
     //prop.setProperty("password","86914381")
 
-    //在真实值后面追加预测值
-    val actualAndForcastRdd=trainTsrdd.map{
-      _ match {
-        case (key,actualValue)=>(key,actualValue.toArray.map(_.formatted("%.2f")).mkString(","))
-      }
-    }.join(forecastValue.map{
-      _ match{
-        case (key,forecastValue)=>(key,forecastValue.toArray.map(_.formatted("%.2f")).mkString(","))
-      }
-    }).map(a => a._1+","+a._2).map(_.replaceAll("\\(","").replaceAll("\\)",""))
-    actualAndForcastRdd.foreach(println)
-    import sparkSession.implicits._
-    val resDF = actualAndForcastRdd.toDF()
-    val dir = outputDir
-    val saveOptions = Map("header" -> "false", "path" -> dir)    
-    resDF//.coalesce(1)
-    .write.format("text").mode(SaveMode.Overwrite).options(saveOptions).save()
-    
-/**
     //获取日期，并转换成rdd
     var dateArray:ArrayBuffer[String]=new ArrayBuffer[String]()
     if(startTime.length==6){
@@ -484,9 +468,42 @@ class TimeSeriesModel extends Serializable{
       dateArray=productStartDayPredictDay(predictedN,startTime,endTime)
     }else if(startTime.length==10){
       dateArray=productStartDayPredictDayRail(predictedN,startTime,endTime)
-
-    //dateDataRdd.foreach(println)
+    }
+    val daterdd = sc.parallelize(dateArray).sortBy(x => x)
+    //daterdd.foreach(println)
     
+    //在真实值后面追加预测值
+    val actualAndForcastRdd=trainTsrdd.map{
+      _ match {
+        case (key,actualValue)=>(key,actualValue.toArray.map(_.formatted("%.2f")).mkString(","))
+      }
+    }.join(forecastValue.map{
+      _ match{
+        case (key,forecastValue)=>(key,forecastValue.toArray.map(_.formatted("%.2f")).mkString(","))
+      }
+    }).map(a => a._1+","+a._2).map(_.replaceAll("\\(","").replaceAll("\\)",""))
+      .map( v => {
+                  var res = ""
+                  val key = v.split(",", 2)(0)
+                  val value_array = v.split(",", 2)(1).split(",")
+                  for(i <- 0 until value_array.length){  
+                    res += (key+","+dateArray(i)+","+value_array(i)+","+runflag+"_")
+                  }
+                  res.substring(0, res.length()-1)
+                }
+      ).flatMap(x=>x.split("_"))
+    
+    
+    //actualAndForcastRdd.foreach(println)
+    import sparkSession.implicits._
+    val resDF = actualAndForcastRdd.toDF()
+    val dir = outputDir
+    val saveOptions = Map("header" -> "false", "path" -> dir)    
+    resDF//.coalesce(1)
+    .write.format("text").mode(SaveMode.Append).options(saveOptions).save()
+    
+    
+/**
     //合并日期和数据值,形成RDD[Row]+keyName
     val actualAndForcastArray=actualAndForcastRdd.collect()
     actualAndForcastRdd.foreach(println)

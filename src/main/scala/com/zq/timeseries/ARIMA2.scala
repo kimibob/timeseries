@@ -265,7 +265,7 @@ object ARIMA2 {
    * @param maxQ limit for the MA order
    * @return an ARIMAModel
    */
-  def autoFit(ts: Vector, maxP: Int = 5, maxD: Int = 2, maxQ: Int = 5): ARIMAModel = {
+  def autoFit(ts: Vector, maxP: Int = 3, maxD: Int = 1, maxQ: Int = 3): ARIMAModel = {
     // p-value threshold for stationarity test
     val kpssSignificance = 0.05
 
@@ -327,7 +327,8 @@ object ARIMA2 {
 
       // Compute AICs and filter out models with worse (larger) AICs than our current best.
       // Also only retain models that are stationary and invertible.
-      val modelsAndAICs = models.filter(m => m.isStationary && m.isInvertible).map(
+      val modelsAndAICs = models//.filter(m => m.isStationary && m.isInvertible)
+      .map(
         model => (model, model.approxAIC(diffedTs)))
       val improvingModelsAndAICs = modelsAndAICs.filter(_._2 < curBestAIC)
 
@@ -744,7 +745,8 @@ class ARIMAModel(
     } else {
       val offset = if (hasIntercept) 1 else 0
       val poly = Array(1.0) ++ coefficients.slice(offset, offset + p).map(-1 * _)
-      allRootsOutsideUnitCircle(poly)
+      Try(
+      allRootsOutsideUnitCircle(poly)).getOrElse(true)
     }
   }
 
@@ -762,7 +764,8 @@ class ARIMAModel(
     } else {
       val offset = if (hasIntercept) 1 else 0
       val poly = Array(1.0) ++ coefficients.drop(offset + p)
-      allRootsOutsideUnitCircle(poly)
+      Try(
+      allRootsOutsideUnitCircle(poly)).getOrElse(true)
     }
   }
 
