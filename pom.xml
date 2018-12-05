@@ -18,9 +18,9 @@
 		<maven.compiler.source>1.6</maven.compiler.source>
 		<maven.compiler.target>1.6</maven.compiler.target>
 		<encoding>UTF-8</encoding>
-		<scala.minor.version>2.11</scala.minor.version>
-		<scala.complete.version>${scala.minor.version}.8</scala.complete.version>
-		<spark.version>2.1.0</spark.version>
+		<scala.minor.version>2.10</scala.minor.version>
+		<scala.complete.version>${scala.minor.version}.5</scala.complete.version>
+		<spark.version>1.6.2</spark.version>
 		<sparkts.version>0.4.0</sparkts.version>
 	</properties>
 
@@ -30,11 +30,13 @@
             <artifactId>scala-library</artifactId>
             <version>${scala.complete.version}</version>
         </dependency>
+        <!--  
 		<dependency>
 			<groupId>com.cloudera.sparkts</groupId>
             <artifactId>sparkts</artifactId>
             <version>${sparkts.version}</version>
 		</dependency>
+		-->
 		<dependency>
 			<groupId>org.apache.spark</groupId>
 			<artifactId>spark-core_${scala.minor.version}</artifactId>
@@ -58,11 +60,31 @@
 			<version>4.11</version>
 			<scope>test</scope>
 		</dependency>
+		
+		<dependency>
+            <groupId>org.threeten</groupId>
+            <artifactId>threeten-extra</artifactId>
+            <version>0.9</version>
+            <scope>system</scope>
+            <systemPath>${basedir}/lib/threeten-extra-0.9.jar</systemPath>
+        </dependency>
+        
+        <dependency>
+            <groupId>com.cloudera.sparkts</groupId>
+            <artifactId>sparkts</artifactId>
+            <version>0.3.0</version>
+            <scope>system</scope>
+            <systemPath>${basedir}/lib/sparkts-0.3.0.jar</systemPath>
+        </dependency>
+        
+        <dependency>
+		    <groupId>com.databricks</groupId>
+		    <artifactId>spark-csv_2.10</artifactId>
+		    <version>1.4.0</version>
+		</dependency>
 	</dependencies>
 
   <build>
-    <sourceDirectory>src/main/scala</sourceDirectory>
-    <testSourceDirectory>src/test/scala</testSourceDirectory>
     <plugins>
       <plugin>
         <!-- see http://davidb.github.com/scala-maven-plugin -->

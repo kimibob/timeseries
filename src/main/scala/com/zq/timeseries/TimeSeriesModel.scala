@@ -12,7 +12,6 @@ import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.sql.{Row, SQLContext, SaveMode}
 
 import scala.collection.mutable.ArrayBuffer
-import org.apache.spark.sql.SparkSession
 import java.math.BigDecimal
 import scala.util.Try
 import com.cloudera.sparkts.models.ARIMA
@@ -450,7 +449,7 @@ class TimeSeriesModel extends Serializable{
    * @param keyName 选择哪个key输出
    * @param sqlContext
    */
-  def actualForcastDateSave(trainTsrdd:TimeSeriesRDD[String],forecastValue:RDD[(String,Vector)],predictedN:Int,startTime:String,endTime:String,sc:SparkContext,hiveColumnName:List[String],keyName:String,sparkSession:SparkSession,outputDir:String,runflag:String): Unit ={
+  def actualForcastDateSave(trainTsrdd:TimeSeriesRDD[String],forecastValue:RDD[(String,Vector)],predictedN:Int,startTime:String,endTime:String,sc:SparkContext,hiveColumnName:List[String],keyName:String,sqlContext:SQLContext,outputDir:String,runflag:String): Unit ={
     //加载驱动
     //Class.forName("com.mysql.jdbc.Driver")
     //设置用户名和密码
@@ -495,7 +494,8 @@ class TimeSeriesModel extends Serializable{
     
     
     //actualAndForcastRdd.foreach(println)
-    import sparkSession.implicits._
+    //import sparkSession.implicits._
+    import sqlContext.implicits._
     val resDF = actualAndForcastRdd.toDF()
     val dir = outputDir
     val saveOptions = Map("header" -> "false", "path" -> dir)    

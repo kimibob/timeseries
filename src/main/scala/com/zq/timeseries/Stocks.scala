@@ -62,6 +62,9 @@ object Stocks {
 
     // Align the ticker data on the DateTimeIndex to create a TimeSeriesRDD
     //其中是有缺失值的
+      
+    /*
+
     val tickerTsrdd = TimeSeriesRDD.timeSeriesRDDFromObservations(dtIndex, tickerObs,
       "timestamp", "symbol", "price")
     tickerTsrdd.foreach(println)
@@ -92,6 +95,10 @@ object Stocks {
 
     val timeSeriesModel = new TimeSeriesModel(4, "outputtablename")
     var forecastValue: RDD[(String, Vector)] = sc.parallelize(Seq(("", Vectors.dense(1))))
+    
+    */
+      
+      
     //选择模型
 //    val modelName="arima"
 //    modelName match {

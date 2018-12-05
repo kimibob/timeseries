@@ -10,7 +10,6 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, Row, SQLContext}
 import org.apache.spark.{SparkConf, SparkContext}
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.mllib.linalg.DenseVector
 import scala.util.Try
 
@@ -94,7 +93,7 @@ object TimeSeriesTrain {
 //    val startTime="20180301"
 //    val endTime="20180731"
 //    val predictedN=184
-//    val runflag = "localtime2"
+//    val runflag = "localtime3"
     
     
     val sc = new SparkContext(conf)
@@ -103,7 +102,7 @@ object TimeSeriesTrain {
      * 从Spark2.0以上版本开始，Spark使用全新的SparkSession接口替代Spark1.6中的SQLContext及HiveContext接口来实现其对数据加载、转换、处理等功能。
      * SparkSession实现了SQLContext及HiveContext所有功能。
      */
-    val sparkSession = SparkSession.builder().config(conf).getOrCreate()
+    //val sparkSession = SparkSession.builder().config(conf).getOrCreate()
     
     /*****参数设置*****/
     //hive中的数据库名字.数据表名
@@ -125,10 +124,17 @@ object TimeSeriesTrain {
     /*****读取数据和创建训练数据*****/
 
     //val csvfile = sparkSession.read.csv("data/dataflow20180710.csv")
-    val csvfile = sparkSession.read.csv(inputfile_path)
-                  .withColumnRenamed("_c0", "date")
-                  .withColumnRenamed("_c1", "cellid")
-                  .withColumnRenamed("_c2", "bytes")
+//    val csvfile = sqlContext.read.csv(inputfile_path)
+//                  .withColumnRenamed("_c0", "date")
+//                  .withColumnRenamed("_c1", "cellid")
+//                  .withColumnRenamed("_c2", "bytes")
+    
+//    val csvfile = sqlContext.read
+//    .format("com.databricks.spark.csv")
+//    //.option("mode", "DROPMALFORMED")
+//    .load("data/dataflow.csv"); 
+    
+    val csvfile = sqlContext.read.format("com.databricks.spark.csv").load(inputfile_path); 
     
     csvfile.printSchema()
     val zonedDateDataDf=timeChangeToDate(csvfile,sqlContext,columnName,startTime,sc)
@@ -201,6 +207,6 @@ object TimeSeriesTrain {
     forecastValue.cache();
     //合并实际值和预测值，并加上日期,形成dataframe(Date,Data)，并保存
     println("save file...")
-    timeSeriesModel.actualForcastDateSave(trainTsrddnotnull,forecastValue,predictedN,startTime,endTime,sc,columnName,"dataflow",sparkSession,outputDir,runflag)
+    timeSeriesModel.actualForcastDateSave(trainTsrddnotnull,forecastValue,predictedN,startTime,endTime,sc,columnName,"dataflow",sqlContext,outputDir,runflag)
   }
 }

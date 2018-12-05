@@ -2,7 +2,6 @@ package com.zq.timeseries
 
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
-import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.SQLContext
 import org.apache.log4j.Level
 import org.apache.log4j.Logger
@@ -40,6 +39,7 @@ object TimeGompertz {
      * 从Spark2.0以上版本开始，Spark使用全新的SparkSession接口替代Spark1.6中的SQLContext及HiveContext接口来实现其对数据加载、转换、处理等功能。
      * SparkSession实现了SQLContext及HiveContext所有功能。
      */
+    /*
     val sparkSession = SparkSession.builder().config(conf).getOrCreate()
     
     val group_num = 3;
@@ -87,5 +87,7 @@ object TimeGompertz {
     val saveOptions = Map("header" -> "false", "path" -> outputDir)    
     resDF//.coalesce(1)
     .write.format("text").mode(SaveMode.Overwrite).options(saveOptions).save()
+
+    */
   }
 }
